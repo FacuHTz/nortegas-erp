@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import {
   Flame, LayoutDashboard, ShoppingCart, Users, Package, Boxes, Truck,
   ShoppingBag, FileText, Wallet, Percent, UserCog, Settings, LogOut, Menu, X,
+  BarChart3,
 } from "lucide-react";
 
 const MODULOS = [
@@ -19,6 +20,7 @@ const MODULOS = [
   { href: "/compras", label: "Compras", icon: ShoppingBag },
   { href: "/facturacion", label: "Facturación", icon: FileText },
   { href: "/tesoreria", label: "Tesorería", icon: Wallet },
+  { href: "/resumenes", label: "Resúmenes", icon: BarChart3 },
   { href: "/impuestos", label: "Impuestos", icon: Percent },
   { href: "/empleados", label: "Equipo", icon: UserCog },
   { href: "/ajustes", label: "Ajustes", icon: Settings },

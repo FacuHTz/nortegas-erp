@@ -8,10 +8,14 @@ export const dynamic = "force-dynamic";
 export default async function ResumenesPage() {
   const supabase = await createClient();
 
-  const [{ data: config }, { data: campos }] = await Promise.all([
+  const [{ data: config }, { data: camposTodos }] = await Promise.all([
     supabase.from("resumen_config").select("*").order("orden"),
-    supabase.from("campos_config").select("*").eq("activo", true).order("grupo").order("orden"),
+    // Traer TODOS los campos (activos e inactivos) ordenados para Configuración
+    supabase.from("campos_config").select("*").order("es_base", { ascending: false }).order("grupo").order("orden"),
   ]);
+
+  // Solo los activos para carga/resumen/grilla
+  const camposActivos = ((camposTodos as CampoConfig[]) ?? []).filter((c) => c.activo);
 
   return (
     <>
@@ -21,7 +25,8 @@ export default async function ResumenesPage() {
       />
       <ResumenesTabs
         initialConfig={(config as ResumenConfigRow[]) ?? []}
-        initialCampos={(campos as CampoConfig[]) ?? []}
+        initialCampos={camposActivos}
+        initialCamposTodos={(camposTodos as CampoConfig[]) ?? []}
       />
     </>
   );

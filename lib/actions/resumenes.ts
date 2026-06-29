@@ -50,7 +50,7 @@ export type ResumenConfigRow = {
   activo: boolean;
 };
 
-/** Definición de un campo personalizado */
+/** Definición de un campo (base o personalizado) */
 export type CampoConfig = {
   id?: number;
   clave: string;
@@ -59,6 +59,7 @@ export type CampoConfig = {
   grupo: string;
   orden: number;
   activo: boolean;
+  es_base?: boolean;
 };
 
 // ── CARGA DE UN DÍA ──────────────────────────────────────────────────────────
@@ -123,21 +124,48 @@ export async function guardarResumenConfig(rows: Omit<ResumenConfigRow, "id">[])
   return { ok: true };
 }
 
-// ── GUARDAR CAMPOS PERSONALIZADOS ────────────────────────────────────────────
+// ── GUARDAR CAMPOS (base + personalizados) ───────────────────────────────────
 export async function guardarCamposConfig(campos: Omit<CampoConfig, "id">[]) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("No autenticado");
 
-  // Reemplazar toda la config de campos
-  const { error: delErr } = await supabase
-    .from("campos_config")
-    .delete()
-    .neq("id", 0);
-  if (delErr) throw new Error(delErr.message);
+  // Separar base vs custom
+  const base   = campos.filter((c) => c.es_base);
+  const custom = campos.filter((c) => !c.es_base);
 
-  if (campos.length > 0) {
-    const { error } = await supabase.from("campos_config").insert(campos);
+  // Upsert campos base (nunca se borran, solo se actualiza etiqueta/grupo/orden/activo)
+  if (base.length > 0) {
+    const { error } = await supabase.from("campos_config").upsert(
+      base.map(({ es_base: _ignored, ...rest }) => ({ ...rest, es_base: true })),
+      { onConflict: "clave" }
+    );
+    if (error) throw new Error(error.message);
+  }
+
+  // Para custom: obtener claves que ya existen en DB
+  const { data: existentes } = await supabase
+    .from("campos_config")
+    .select("clave")
+    .eq("es_base", false);
+  const clavesExistentes = new Set((existentes ?? []).map((r: { clave: string }) => r.clave));
+  const clavesEnviadas   = new Set(custom.map((c) => c.clave));
+
+  // Desactivar los que ya no están en el payload (en lugar de borrar)
+  const clavesADesactivar = [...clavesExistentes].filter((c) => !clavesEnviadas.has(c));
+  if (clavesADesactivar.length > 0) {
+    await supabase
+      .from("campos_config")
+      .update({ activo: false })
+      .in("clave", clavesADesactivar);
+  }
+
+  // Upsert los custom enviados
+  if (custom.length > 0) {
+    const { error } = await supabase.from("campos_config").upsert(
+      custom.map(({ es_base: _ignored, ...rest }) => ({ ...rest, es_base: false })),
+      { onConflict: "clave" }
+    );
     if (error) throw new Error(error.message);
   }
 

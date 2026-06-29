@@ -19,11 +19,16 @@ type TabId = typeof TABS[number]["id"];
 export function ResumenesTabs({
   initialConfig,
   initialCampos,
+  initialCamposTodos,
 }: {
   initialConfig: ResumenConfigRow[];
-  initialCampos: CampoConfig[];
+  initialCampos: CampoConfig[];        // solo activos → para carga/grilla/resumen
+  initialCamposTodos: CampoConfig[];   // todos → para configuración
 }) {
   const [active, setActive] = useState<TabId>("carga");
+
+  // Campos extra activos (los no-base activos para carga y grilla)
+  const camposExtraActivos = initialCampos.filter((c) => !c.es_base);
 
   return (
     <div>
@@ -45,10 +50,15 @@ export function ResumenesTabs({
       </div>
 
       {/* Tab panels */}
-      {active === "carga"   && <TabCarga camposExtra={initialCampos} />}
+      {active === "carga"   && <TabCarga camposExtra={camposExtraActivos} />}
       {active === "resumen" && <TabResumen initialConfig={initialConfig} />}
-      {active === "grilla"  && <TabGrilla camposExtra={initialCampos} />}
-      {active === "config"  && <TabConfig initialConfig={initialConfig} initialCampos={initialCampos} />}
+      {active === "grilla"  && <TabGrilla camposExtra={camposExtraActivos} />}
+      {active === "config"  && (
+        <TabConfig
+          initialConfig={initialConfig}
+          initialCampos={initialCamposTodos}
+        />
+      )}
     </div>
   );
 }

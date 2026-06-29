@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { AlertTriangle, CheckCircle2, CalendarDays } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { guardarRegistroDiario } from "@/lib/actions/resumenes";
+import { guardarRegistroDiario, type CampoConfig } from "@/lib/actions/resumenes";
 import { Card, Input, Button } from "@/components/ui";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -20,11 +20,21 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function NumInput({ label, name, int }: { label: string; name: string; int?: boolean }) {
+function NumInput({
+  label,
+  name,
+  int,
+  isExtra,
+}: {
+  label: string;
+  name: string;
+  int?: boolean;
+  isExtra?: boolean;
+}) {
   return (
     <Input
       label={label}
-      name={name}
+      name={isExtra ? `extra__${name}` : name}
       type="number"
       min="0"
       step={int ? "1" : "0.01"}
@@ -34,7 +44,7 @@ function NumInput({ label, name, int }: { label: string; name: string; int?: boo
 }
 
 // ─── componente ─────────────────────────────────────────────────────────────
-export function TabCarga() {
+export function TabCarga({ camposExtra }: { camposExtra: CampoConfig[] }) {
   const [fecha, setFecha] = useState(today());
   const [status, setStatus] = useState<"idle" | "checking" | "exists" | "ok" | "error">("idle");
   const [msg, setMsg] = useState("");
@@ -72,6 +82,14 @@ export function TabCarga() {
     });
   }
 
+  // Agrupar campos extra por grupo
+  const gruposExtra = camposExtra.reduce<Record<string, CampoConfig[]>>((acc, c) => {
+    const g = c.grupo || "Otros";
+    if (!acc[g]) acc[g] = [];
+    acc[g].push(c);
+    return acc;
+  }, {});
+
   return (
     <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
       {/* Selector de fecha */}
@@ -101,7 +119,7 @@ export function TabCarga() {
         </div>
       </Card>
 
-      {/* ── Sección finanzas ── */}
+      {/* ── Finanzas ── */}
       <Card title="Finanzas del día">
         <Section title="Importes">
           <NumInput label="Dinero recaudado ($)" name="dinero_recaudado" />
@@ -144,6 +162,23 @@ export function TabCarga() {
           ))}
         </div>
       </Card>
+
+      {/* ── Campos extra (dinámicos) ── */}
+      {Object.entries(gruposExtra).map(([grupo, fields]) => (
+        <Card key={grupo} title={grupo}>
+          <Section title={grupo}>
+            {fields.map((campo) => (
+              <NumInput
+                key={campo.clave}
+                label={campo.etiqueta}
+                name={campo.clave}
+                int={campo.tipo === "integer"}
+                isExtra
+              />
+            ))}
+          </Section>
+        </Card>
+      ))}
 
       {/* Notas */}
       <Card title="Notas del día">

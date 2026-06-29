@@ -37,6 +37,7 @@ export type RegistroDiario = {
   compra_gustavo_x10: number;
   compra_gustavo_x15: number;
   compra_gustavo_x45: number;
+  datos_extra: Record<string, number | string>;
   notas?: string | null;
 };
 
@@ -46,6 +47,17 @@ export type ResumenConfigRow = {
   etiqueta: string;
   campos_suma: string[];
   campos_resta: string[];
+  activo: boolean;
+};
+
+/** Definición de un campo personalizado */
+export type CampoConfig = {
+  id?: number;
+  clave: string;
+  etiqueta: string;
+  tipo: "numeric" | "integer" | "text";
+  grupo: string;
+  orden: number;
   activo: boolean;
 };
 
@@ -96,11 +108,10 @@ export async function guardarResumenConfig(rows: Omit<ResumenConfigRow, "id">[])
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("No autenticado");
 
-  // Reemplazar toda la config: borrar e insertar
   const { error: delErr } = await supabase
     .from("resumen_config")
     .delete()
-    .neq("id", 0); // borrar todo
+    .neq("id", 0);
   if (delErr) throw new Error(delErr.message);
 
   if (rows.length > 0) {
@@ -112,8 +123,39 @@ export async function guardarResumenConfig(rows: Omit<ResumenConfigRow, "id">[])
   return { ok: true };
 }
 
+// ── GUARDAR CAMPOS PERSONALIZADOS ────────────────────────────────────────────
+export async function guardarCamposConfig(campos: Omit<CampoConfig, "id">[]) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("No autenticado");
+
+  // Reemplazar toda la config de campos
+  const { error: delErr } = await supabase
+    .from("campos_config")
+    .delete()
+    .neq("id", 0);
+  if (delErr) throw new Error(delErr.message);
+
+  if (campos.length > 0) {
+    const { error } = await supabase.from("campos_config").insert(campos);
+    if (error) throw new Error(error.message);
+  }
+
+  revalidatePath("/resumenes");
+  return { ok: true };
+}
+
 // ── helpers privados ─────────────────────────────────────────────────────────
 function buildPayload(formData: FormData, userId: string) {
+  // Extraer datos_extra: cualquier key que empiece con "extra__"
+  const datos_extra: Record<string, number | string> = {};
+  formData.forEach((val, key) => {
+    if (key.startsWith("extra__")) {
+      const campo = key.slice(7);
+      datos_extra[campo] = val.toString();
+    }
+  });
+
   return {
     fecha: String(formData.get("fecha") ?? "").trim(),
     dinero_recaudado:   num(formData.get("dinero_recaudado")),
@@ -142,6 +184,7 @@ function buildPayload(formData: FormData, userId: string) {
     compra_gustavo_x10:  num(formData.get("compra_gustavo_x10")),
     compra_gustavo_x15:  num(formData.get("compra_gustavo_x15")),
     compra_gustavo_x45:  num(formData.get("compra_gustavo_x45")),
+    datos_extra,
     notas: str(formData.get("notas")),
     usuario_id: userId,
   };

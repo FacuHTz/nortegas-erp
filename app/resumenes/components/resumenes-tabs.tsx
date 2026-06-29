@@ -5,7 +5,7 @@ import { TabCarga } from "./tab-carga";
 import { TabResumen } from "./tab-resumen";
 import { TabGrilla } from "./tab-grilla";
 import { TabConfig } from "./tab-config";
-import type { ResumenConfigRow } from "@/lib/actions/resumenes";
+import type { ResumenConfigRow, CampoConfig } from "@/lib/actions/resumenes";
 
 const TABS = [
   { id: "carga",   label: "Carga diaria" },
@@ -16,7 +16,13 @@ const TABS = [
 
 type TabId = typeof TABS[number]["id"];
 
-export function ResumenesTabs({ initialConfig }: { initialConfig: ResumenConfigRow[] }) {
+export function ResumenesTabs({
+  initialConfig,
+  initialCampos,
+}: {
+  initialConfig: ResumenConfigRow[];
+  initialCampos: CampoConfig[];
+}) {
   const [active, setActive] = useState<TabId>("carga");
 
   return (
@@ -39,10 +45,10 @@ export function ResumenesTabs({ initialConfig }: { initialConfig: ResumenConfigR
       </div>
 
       {/* Tab panels */}
-      {active === "carga"   && <TabCarga />}
+      {active === "carga"   && <TabCarga camposExtra={initialCampos} />}
       {active === "resumen" && <TabResumen initialConfig={initialConfig} />}
-      {active === "grilla"  && <TabGrilla />}
-      {active === "config"  && <TabConfig initialConfig={initialConfig} />}
+      {active === "grilla"  && <TabGrilla camposExtra={initialCampos} />}
+      {active === "config"  && <TabConfig initialConfig={initialConfig} initialCampos={initialCampos} />}
     </div>
   );
 }

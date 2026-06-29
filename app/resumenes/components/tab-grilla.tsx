@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { actualizarRegistrosDiarios, type RegistroDiario } from "@/lib/actions/resumenes";
+import { actualizarRegistrosDiarios, type RegistroDiario, type CampoConfig } from "@/lib/actions/resumenes";
 import { Button } from "@/components/ui";
 import { CheckCircle2, AlertTriangle } from "lucide-react";
 
@@ -12,7 +12,7 @@ const MESES = [
   "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre",
 ];
 
-type ColDef = { key: keyof RegistroDiario; label: string; int?: boolean };
+type ColDef = { key: keyof RegistroDiario; label: string; int?: boolean; isExtra?: boolean; clave?: string };
 
 const COLS: ColDef[] = [
   { key: "dinero_recaudado",   label: "Recaudado ($)" },
@@ -44,7 +44,7 @@ const COLS: ColDef[] = [
 ];
 
 // ─── componente ─────────────────────────────────────────────────────────────
-export function TabGrilla() {
+export function TabGrilla({ camposExtra = [] }: { camposExtra?: CampoConfig[] }) {
   const now = new Date();
   const [mes, setMes] = useState(now.getMonth() + 1);
   const [anio, setAnio] = useState(now.getFullYear());
@@ -74,10 +74,25 @@ export function TabGrilla() {
     load();
   }, [mes, anio]);
 
-  function updateCell(rowIdx: number, key: keyof RegistroDiario, val: string) {
+  // Columnas extra dinámicas
+  const extraCols: ColDef[] = camposExtra.map((c) => ({
+    key: `__extra__${c.clave}` as keyof RegistroDiario,
+    label: c.etiqueta,
+    int: c.tipo === "integer",
+    isExtra: true,
+    clave: c.clave,
+  }));
+  const allCols = [...COLS, ...extraCols];
+
+  function updateCell(rowIdx: number, key: keyof RegistroDiario, val: string, isExtra?: boolean, clave?: string) {
     setRows((prev) => {
       const next = [...prev];
-      next[rowIdx] = { ...next[rowIdx], [key]: val === "" ? 0 : Number(val) };
+      if (isExtra && clave) {
+        const datos_extra = { ...(next[rowIdx].datos_extra ?? {}), [clave]: val === "" ? 0 : Number(val) };
+        next[rowIdx] = { ...next[rowIdx], datos_extra };
+      } else {
+        next[rowIdx] = { ...next[rowIdx], [key]: val === "" ? 0 : Number(val) };
+      }
       return next;
     });
     setDirty(true);
@@ -158,8 +173,13 @@ export function TabGrilla() {
                 <th className="sticky left-0 z-10 whitespace-nowrap bg-gray-50 px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted">
                   Fecha
                 </th>
-                {COLS.map((c) => (
-                  <th key={c.key} className="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted">
+                {allCols.map((c) => (
+                  <th
+                    key={String(c.key)}
+                    className={`whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide ${
+                      (c as ColDef & { isExtra?: boolean }).isExtra ? "text-brand/70" : "text-muted"
+                    }`}
+                  >
                     {c.label}
                   </th>
                 ))}
@@ -171,18 +191,26 @@ export function TabGrilla() {
                   <td className="sticky left-0 z-10 whitespace-nowrap bg-white px-3 py-1.5 font-medium text-ink">
                     {row.fecha}
                   </td>
-                  {COLS.map((col) => (
-                    <td key={col.key} className="px-1 py-1">
-                      <input
-                        type="number"
-                        min="0"
-                        step={col.int ? "1" : "0.01"}
-                        value={String(row[col.key] ?? 0)}
-                        onChange={(e) => updateCell(ri, col.key, e.target.value)}
-                        className="w-24 rounded border border-transparent bg-transparent px-2 py-1 text-right text-xs tabular-nums text-ink hover:border-line focus:border-brand focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand/30"
-                      />
-                    </td>
-                  ))}
+                  {allCols.map((col) => {
+                    const extCol = col as ColDef & { isExtra?: boolean; clave?: string };
+                    const val = extCol.isExtra && extCol.clave
+                      ? String((row.datos_extra ?? {})[extCol.clave] ?? 0)
+                      : String(row[col.key] ?? 0);
+                    return (
+                      <td key={String(col.key)} className="px-1 py-1">
+                        <input
+                          type="number"
+                          min="0"
+                          step={col.int ? "1" : "0.01"}
+                          value={val}
+                          onChange={(e) =>
+                            updateCell(ri, col.key, e.target.value, extCol.isExtra, extCol.clave)
+                          }
+                          className="w-24 rounded border border-transparent bg-transparent px-2 py-1 text-right text-xs tabular-nums text-ink hover:border-line focus:border-brand focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand/30"
+                        />
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>

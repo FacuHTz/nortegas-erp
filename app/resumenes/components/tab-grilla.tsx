@@ -61,7 +61,7 @@ export function TabGrilla({ camposExtra = [] }: { camposExtra?: CampoConfig[] })
       setDirty(false);
       const sb = createClient();
       const desde = `${anio}-${String(mes).padStart(2, "0")}-01`;
-      const hasta = `${anio}-${String(mes).padStart(2, "0")}-31`;
+      const hasta = new Date(anio, mes, 0).toISOString().slice(0, 10);
       const { data } = await sb
         .from("registros_diarios")
         .select("*")
@@ -76,7 +76,7 @@ export function TabGrilla({ camposExtra = [] }: { camposExtra?: CampoConfig[] })
 
   // Columnas extra dinámicas
   const extraCols: ColDef[] = camposExtra.map((c) => ({
-    key: `__extra__${c.clave}` as keyof RegistroDiario,
+    key: `extra__${c.clave}` as keyof RegistroDiario,
     label: c.etiqueta,
     int: c.tipo === "integer",
     isExtra: true,

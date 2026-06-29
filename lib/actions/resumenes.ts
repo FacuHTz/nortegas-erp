@@ -104,20 +104,26 @@ export async function actualizarRegistrosDiarios(registros: RegistroDiario[]) {
 }
 
 // ── GUARDAR CONFIGURACIÓN DEL RESUMEN ────────────────────────────────────────
+// Bug 5 fix: insert primero, luego borra los IDs viejos (evita dejar config vacía si falla)
 export async function guardarResumenConfig(rows: Omit<ResumenConfigRow, "id">[]) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("No autenticado");
 
-  const { error: delErr } = await supabase
+  const { data: inserted, error: insErr } = await supabase
     .from("resumen_config")
-    .delete()
-    .neq("id", 0);
-  if (delErr) throw new Error(delErr.message);
+    .insert(rows.map((r, i) => ({ ...r, orden: i + 1 })))
+    .select("id");
+  if (insErr) throw new Error(insErr.message);
 
-  if (rows.length > 0) {
-    const { error } = await supabase.from("resumen_config").insert(rows);
-    if (error) throw new Error(error.message);
+  const newIds = (inserted ?? []).map((r: { id: number }) => r.id);
+  if (newIds.length > 0) {
+    await supabase
+      .from("resumen_config")
+      .delete()
+      .not("id", "in", `(${newIds.join(",")})`);
+  } else {
+    await supabase.from("resumen_config").delete().neq("id", 0);
   }
 
   revalidatePath("/resumenes");
@@ -177,10 +183,12 @@ export async function guardarCamposConfig(campos: Omit<CampoConfig, "id">[]) {
 function buildPayload(formData: FormData, userId: string) {
   // Extraer datos_extra: cualquier key que empiece con "extra__"
   const datos_extra: Record<string, number | string> = {};
+  // Bug 6 fix: convertir a número, nunca guardar string
   formData.forEach((val, key) => {
     if (key.startsWith("extra__")) {
       const campo = key.slice(7);
-      datos_extra[campo] = val.toString();
+      const str = val.toString().trim();
+      datos_extra[campo] = str === "" ? 0 : Number(str);
     }
   });
 

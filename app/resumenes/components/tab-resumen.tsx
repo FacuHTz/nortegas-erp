@@ -11,17 +11,20 @@ const MESES = [
   "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre",
 ];
 
-function sumField(rows: RegistroDiario[], field: keyof RegistroDiario) {
-  return rows.reduce((a, r) => a + (Number(r[field]) || 0), 0);
+// Bug 2 fix: soporta prefijo extra__ para campos dinámicos en datos_extra
+function sumField(rows: RegistroDiario[], field: string) {
+  return rows.reduce((a, r) => {
+    if (field.startsWith("extra__")) {
+      const clave = field.slice(7);
+      return a + (Number((r.datos_extra ?? {})[clave]) || 0);
+    }
+    return a + (Number(r[field as keyof RegistroDiario]) || 0);
+  }, 0);
 }
 
 function calcResumenRow(rows: RegistroDiario[], config: ResumenConfigRow) {
-  const suma = config.campos_suma.reduce(
-    (a, f) => a + sumField(rows, f as keyof RegistroDiario), 0
-  );
-  const resta = config.campos_resta.reduce(
-    (a, f) => a + sumField(rows, f as keyof RegistroDiario), 0
-  );
+  const suma  = config.campos_suma.reduce((a, f) => a + sumField(rows, f), 0);
+  const resta = config.campos_resta.reduce((a, f) => a + sumField(rows, f), 0);
   return suma - resta;
 }
 
@@ -43,7 +46,7 @@ export function TabResumen({
       setLoading(true);
       const sb = createClient();
       const desde = `${anio}-${String(mes).padStart(2, "0")}-01`;
-      const hasta = `${anio}-${String(mes).padStart(2, "0")}-31`;
+      const hasta = new Date(anio, mes, 0).toISOString().slice(0, 10);
       const [{ data: regs }, { data: cfg }] = await Promise.all([
         sb
           .from("registros_diarios")
@@ -87,14 +90,10 @@ export function TabResumen({
     0
   );
 
-  // grand total (primera fila del config que sea "recaudado" menos todos los egresos)
+  // Bug 1 fix: grandTotal es la suma de todas las filas del resumen activo
   const grandTotal = config
     .filter((c) => c.activo)
-    .reduce((acc, row) => {
-      const v = calcResumenRow(registros, row);
-      // primer campo → suma, el resto → resta para mostrar resultado neto
-      return acc;
-    }, 0);
+    .reduce((acc, row) => acc + calcResumenRow(registros, row), 0);
 
   const resumenFinal = config
     .filter((c) => c.activo)
@@ -153,6 +152,12 @@ export function TabResumen({
                   </span>
                 </div>
               ))}
+
+              {/* Total general destacado — Bug 1 fix */}
+              <div className="flex items-center justify-between bg-brand/5 px-5 py-4">
+                <span className="font-display text-sm font-bold uppercase tracking-wide text-ink">Total</span>
+                <span className="font-display text-2xl font-bold tabular-nums text-brand">{ars(grandTotal)}</span>
+              </div>
 
               {/* VENTAS GAS inline */}
               <div className="px-5 py-3">

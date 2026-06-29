@@ -324,7 +324,6 @@ function PanelCampos({ initialCampos }: { initialCampos: CampoConfig[] }) {
               <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted">Tipo</th>
               <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted">Grupo</th>
               <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-muted">Activo</th>
-              <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted" />
             </tr>
           </thead>
           <tbody className="divide-y divide-line/60">
@@ -343,6 +342,8 @@ function PanelCampos({ initialCampos }: { initialCampos: CampoConfig[] }) {
   );
 }
 
+const NUEVO_GRUPO_SENTINEL = "__nuevo__";
+
 function CampoFila({
   campo, grupos, onChange,
 }: {
@@ -350,10 +351,22 @@ function CampoFila({
   grupos: string[];
   onChange: (c: LocalCampo) => void;
 }) {
+  // Si el grupo actual no está en la lista conocida, estamos en modo "nuevo grupo"
+  const grupoEnLista = grupos.includes(campo.grupo);
+  const [nuevoGrupo, setNuevoGrupo] = useState(!grupoEnLista && !!campo.grupo);
+
   const inputCls =
     "rounded-lg border border-line bg-white px-2.5 py-1.5 text-sm text-ink focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 w-full disabled:bg-gray-50 disabled:text-muted disabled:cursor-not-allowed";
 
-  const listId = `grupos-${campo.localId}`;
+  function handleGrupoSelect(val: string) {
+    if (val === NUEVO_GRUPO_SENTINEL) {
+      setNuevoGrupo(true);
+      onChange({ ...campo, grupo: "" });
+    } else {
+      setNuevoGrupo(false);
+      onChange({ ...campo, grupo: val });
+    }
+  }
 
   return (
     <tr className={`transition-colors ${campo.activo ? "hover:bg-paper/50" : "bg-gray-50/60 opacity-60"}`}>
@@ -365,14 +378,19 @@ function CampoFila({
               <Lock size={12} className="shrink-0 text-muted/60" />
             </span>
           )}
-          <input
-            type="text"
-            value={campo.clave}
-            disabled={campo.es_base}
-            onChange={(e) => onChange({ ...campo, clave: toSnakeCase(e.target.value) })}
-            placeholder="ej: ventas_20c"
-            className={inputCls}
-          />
+          {campo.es_base ? (
+            <span className="w-full rounded-lg border border-line bg-gray-50 px-2.5 py-1.5 font-mono text-xs text-muted">
+              {campo.clave}
+            </span>
+          ) : (
+            <input
+              type="text"
+              value={campo.clave}
+              onChange={(e) => onChange({ ...campo, clave: toSnakeCase(e.target.value) })}
+              placeholder="ej: ventas_20c"
+              className={inputCls}
+            />
+          )}
         </div>
       </td>
       {/* Etiqueta */}
@@ -398,19 +416,42 @@ function CampoFila({
           ))}
         </select>
       </td>
-      {/* Grupo */}
+      {/* Grupo — select real con opción "Nuevo grupo" */}
       <td className="px-2 py-1.5">
-        <datalist id={listId}>
-          {grupos.map((g) => <option key={g} value={g} />)}
-        </datalist>
-        <input
-          type="text"
-          list={listId}
-          value={campo.grupo}
-          onChange={(e) => onChange({ ...campo, grupo: e.target.value })}
-          placeholder="ej: Ventas GAS"
-          className={inputCls}
-        />
+        {nuevoGrupo ? (
+          <div className="flex items-center gap-1">
+            <input
+              type="text"
+              value={campo.grupo}
+              autoFocus
+              onChange={(e) => onChange({ ...campo, grupo: e.target.value })}
+              placeholder="Nombre del nuevo grupo"
+              className={inputCls}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setNuevoGrupo(false);
+                // Si dejó vacío, volver al primer grupo disponible
+                if (!campo.grupo.trim() && grupos[0]) onChange({ ...campo, grupo: grupos[0] });
+              }}
+              className="shrink-0 rounded-md border border-line bg-white px-2 py-1.5 text-xs text-muted hover:bg-paper"
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          <select
+            value={grupoEnLista ? campo.grupo : NUEVO_GRUPO_SENTINEL}
+            onChange={(e) => handleGrupoSelect(e.target.value)}
+            className={inputCls}
+          >
+            {grupos.map((g) => (
+              <option key={g} value={g}>{g}</option>
+            ))}
+            <option value={NUEVO_GRUPO_SENTINEL}>+ Nuevo grupo…</option>
+          </select>
+        )}
       </td>
       {/* Activo */}
       <td className="px-2 py-1.5 text-center">
@@ -420,16 +461,6 @@ function CampoFila({
           onChange={(e) => onChange({ ...campo, activo: e.target.checked })}
           className="h-4 w-4 rounded accent-brand"
         />
-      </td>
-      {/* Indicador BASE o vacío para custom */}
-      <td className="px-3 py-1.5">
-        {campo.es_base ? (
-          <span className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-muted">
-            <Lock size={10} /> BASE
-          </span>
-        ) : (
-          <span className="text-xs text-muted/50">custom</span>
-        )}
       </td>
     </tr>
   );
